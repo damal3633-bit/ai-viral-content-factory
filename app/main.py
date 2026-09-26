@@ -11,20 +11,33 @@ from thumbnail_generator import create_thumbnail
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "generated"
 
-OUT.mkdir(parents=True, exist_ok=True)
+OUT.mkdir(
+    parents=True,
+    exist_ok=True
+)
 
 
 def main():
 
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    run_id = datetime.now(
+        timezone.utc
+    ).strftime("%Y%m%d_%H%M%S")
 
-    trends = get_trends(limit=5)
+    trends = get_trends(
+        limit=5
+    )
 
     results = []
 
-    for index, trend in enumerate(trends, start=1):
+    for index, trend in enumerate(
+        trends,
+        start=1
+    ):
 
-        for language in ("bn", "hi"):
+        for language in (
+            "bn",
+            "hi"
+        ):
 
             content = make_content(
                 trend,
@@ -41,11 +54,11 @@ def main():
                 exist_ok=True
             )
 
-            # -------------------------
-            # Save content information
-            # -------------------------
-
-            content_file = job_dir / "content.json"
+            # Save content data
+            content_file = (
+                job_dir /
+                "content.json"
+            )
 
             content_file.write_text(
                 json.dumps(
@@ -56,19 +69,13 @@ def main():
                 encoding="utf-8"
             )
 
-            # -------------------------
-            # Generate voice + video
-            # -------------------------
-
+            # Create video
             video = create_video(
                 content,
                 job_dir
             )
 
-            # -------------------------
-            # Generate thumbnail
-            # -------------------------
-
+            # Create thumbnail
             thumbnail = create_thumbnail(
                 content,
                 job_dir
@@ -89,10 +96,6 @@ def main():
                     content_file.relative_to(ROOT)
                 ),
             })
-
-    # -------------------------
-    # Save summary
-    # -------------------------
 
     summary = (
         OUT /
