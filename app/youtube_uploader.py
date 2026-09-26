@@ -44,6 +44,7 @@ def get_access_token():
     try:
         with urllib.request.urlopen(request) as response:
             result = json.loads(response.read().decode())
+
     except urllib.error.HTTPError as e:
         error_body = e.read().decode(errors="replace")
         raise RuntimeError(
@@ -58,17 +59,19 @@ def get_access_token():
     return result["access_token"]
 
 
-def find_one_video():
-    videos = sorted(
-        glob.glob(
-            os.path.join(VIDEO_DIR, "**", "*.mp4"),
-            recursive=True
-        )
+def find_cartoon_video():
+    pattern = os.path.join(
+        VIDEO_DIR,
+        "cartoon_daily",
+        "*.mp4"
     )
+
+    videos = sorted(glob.glob(pattern))
 
     if not videos:
         raise FileNotFoundError(
-            "No MP4 video found in data/generated/"
+            "No Funny Boy cartoon video found in "
+            "data/generated/cartoon_daily/"
         )
 
     return videos[0]
@@ -77,13 +80,12 @@ def find_one_video():
 def upload_video(video_path):
     access_token = get_access_token()
 
-    title = os.path.splitext(
-        os.path.basename(video_path)
-    )[0][:100]
+    title = "Funny Boy 😂 | Daily Cartoon Short"
 
     description = (
-        "AI Viral Content Factory\n\n"
-        "#Shorts #Viral #AI"
+        "Funny Boy-এর নতুন মজার cartoon story!\n\n"
+        "New funny 3D cartoon story every day.\n\n"
+        "#Shorts #FunnyBoy #Cartoon #3DCartoon #Funny"
     )
 
     metadata = {
@@ -91,11 +93,14 @@ def upload_video(video_path):
             "title": title,
             "description": description,
             "tags": [
+                "Funny Boy",
+                "Cartoon",
+                "3D Cartoon",
+                "Funny Cartoon",
+                "Bengali Cartoon",
+                "Hindi Cartoon",
                 "Shorts",
-                "Viral",
-                "AI",
-                "Bengali",
-                "Hindi"
+                "Funny Shorts"
             ],
             "categoryId": "22"
         },
@@ -108,7 +113,7 @@ def upload_video(video_path):
     with open(video_path, "rb") as f:
         video_data = f.read()
 
-    boundary = "----AIContentFactoryBoundary"
+    boundary = "----FunnyBoyCartoonBoundary"
 
     metadata_json = json.dumps(
         metadata,
@@ -124,7 +129,6 @@ def upload_video(video_path):
     ).encode()
 
     body += video_data
-
     body += (
         f"\r\n--{boundary}--\r\n"
     ).encode()
@@ -136,10 +140,8 @@ def upload_video(video_path):
         data=body,
         headers={
             "Authorization": f"Bearer {access_token}",
-            "Content-Type": (
-                "multipart/related; "
-                f"boundary={boundary}"
-            )
+            "Content-Type":
+                f"multipart/related; boundary={boundary}"
         },
         method="POST"
     )
@@ -151,7 +153,9 @@ def upload_video(video_path):
             )
 
     except urllib.error.HTTPError as e:
-        error_body = e.read().decode(errors="replace")
+        error_body = e.read().decode(
+            errors="replace"
+        )
 
         raise RuntimeError(
             "YouTube API upload failed:\n"
@@ -167,7 +171,7 @@ def upload_video(video_path):
 
     print()
     print("=" * 60)
-    print("YOUTUBE UPLOAD SUCCESS")
+    print("FUNNY BOY YOUTUBE UPLOAD SUCCESS")
     print("=" * 60)
     print(f"Video: {os.path.basename(video_path)}")
     print(f"YouTube Video ID: {video_id}")
@@ -176,11 +180,13 @@ def upload_video(video_path):
 
 
 def main():
-    print("Searching for ONE generated video...")
+    print("=" * 60)
+    print("SEARCHING FOR FUNNY BOY CARTOON")
+    print("=" * 60)
 
-    video_path = find_one_video()
+    video_path = find_cartoon_video()
 
-    print(f"Selected video: {video_path}")
+    print(f"Selected cartoon: {video_path}")
 
     upload_video(video_path)
 
