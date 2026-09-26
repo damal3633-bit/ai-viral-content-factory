@@ -8,48 +8,26 @@ import urllib.error
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
 
-CLIENT_FILE = "client_secret.json"
-
-# GitHub Secret
 REFRESH_TOKEN = os.environ.get("YOUTUBE_REFRESH_TOKEN")
+CLIENT_ID = os.environ.get("YOUTUBE_CLIENT_ID")
+CLIENT_SECRET = os.environ.get("YOUTUBE_CLIENT_SECRET")
 
-# IMPORTANT:
-# For the first test, only ONE video will be selected.
 VIDEO_DIR = "data/generated"
 
 
-def get_client_credentials():
-    """
-    Read client_id and client_secret from client_secret.json.
-
-    This file must NOT be committed to GitHub.
-    """
-    with open(CLIENT_FILE, "r", encoding="utf-8") as f:
-        data = json.load(f)
-
-    if "installed" in data:
-        client = data["installed"]
-    else:
-        client = data["web"]
-
-    return client["client_id"], client["client_secret"]
-
-
 def get_access_token():
-    """
-    Exchange refresh token for a temporary access token.
-    """
-
     if not REFRESH_TOKEN:
-        raise RuntimeError(
-            "YOUTUBE_REFRESH_TOKEN GitHub Secret is missing."
-        )
+        raise RuntimeError("YOUTUBE_REFRESH_TOKEN is missing.")
 
-    client_id, client_secret = get_client_credentials()
+    if not CLIENT_ID:
+        raise RuntimeError("YOUTUBE_CLIENT_ID is missing.")
+
+    if not CLIENT_SECRET:
+        raise RuntimeError("YOUTUBE_CLIENT_SECRET is missing.")
 
     data = urllib.parse.urlencode({
-        "client_id": client_id,
-        "client_secret": client_secret,
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET,
         "refresh_token": REFRESH_TOKEN,
         "grant_type": "refresh_token",
     }).encode()
@@ -63,22 +41,24 @@ def get_access_token():
         method="POST"
     )
 
-    with urllib.request.urlopen(request) as response:
-        result = json.loads(response.read().decode())
+    try:
+        with urllib.request.urlopen(request) as response:
+            result = json.loads(response.read().decode())
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode(errors="replace")
+        raise RuntimeError(
+            "Google OAuth token request failed:\n" + error_body
+        )
 
     if "access_token" not in result:
         raise RuntimeError(
-            "Could not obtain YouTube access token."
+            "Google did not return an access token."
         )
 
     return result["access_token"]
 
 
 def find_one_video():
-    """
-    Find exactly ONE MP4 video for the first test.
-    """
-
     videos = sorted(
         glob.glob(
             os.path.join(VIDEO_DIR, "**", "*.mp4"),
@@ -95,23 +75,11 @@ def find_one_video():
 
 
 def upload_video(video_path):
-    """
-    Upload one video to YouTube.
-
-    This first test uses:
-    - private visibility
-    - Shorts-friendly title
-    - basic description
-    """
-
     access_token = get_access_token()
 
     title = os.path.splitext(
         os.path.basename(video_path)
-    )[0]
-
-    # Keep title within YouTube's normal title limit.
-    title = title[:100]
+    )[0][:100]
 
     description = (
         "AI Viral Content Factory\n\n"
@@ -132,7 +100,6 @@ def upload_video(video_path):
             "categoryId": "22"
         },
         "status": {
-            # FIRST TEST = private
             "privacyStatus": "private",
             "selfDeclaredMadeForKids": False
         }
@@ -154,14 +121,15 @@ def upload_video(video_path):
         f"{metadata_json}\r\n"
         f"--{boundary}\r\n"
         "Content-Type: video/mp4\r\n\r\n"
-    ).encode() + video_data + (
+    ).encode()
+
+    body += video_data
+
+    body += (
         f"\r\n--{boundary}--\r\n"
     ).encode()
 
-    url = (
-        UPLOAD_URL
-        + "?part=snippet,status"
-    )
+    url = UPLOAD_URL + "?part=snippet,status"
 
     request = urllib.request.Request(
         url,
@@ -183,9 +151,7 @@ def upload_video(video_path):
             )
 
     except urllib.error.HTTPError as e:
-        error_body = e.read().decode(
-            errors="replace"
-        )
+        error_body = e.read().decode(errors="replace")
 
         raise RuntimeError(
             "YouTube API upload failed:\n"
@@ -196,7 +162,7 @@ def upload_video(video_path):
 
     if not video_id:
         raise RuntimeError(
-            "YouTube upload finished but no video ID was returned."
+            "YouTube did not return a video ID."
         )
 
     print()
@@ -210,7 +176,7 @@ def upload_video(video_path):
 
 
 def main():
-    print("Searching for one generated video...")
+    print("Searching for ONE generated video...")
 
     video_path = find_one_video()
 
