@@ -13,11 +13,8 @@ FPS = 30
 
 def run_command(command, description):
     print("\n" + "=" * 70)
-    print(f"RUNNING: {description}")
+    print("RUNNING:", description)
     print("=" * 70)
-    print("COMMAND:")
-    print(" ".join(str(x) for x in command))
-    print()
 
     result = subprocess.run(
         command,
@@ -34,8 +31,7 @@ def run_command(command, description):
 
     if result.returncode != 0:
         raise RuntimeError(
-            f"{description} failed with exit code "
-            f"{result.returncode}"
+            f"{description} failed with exit code {result.returncode}"
         )
 
     return result
@@ -61,10 +57,8 @@ def get_duration(audio_file):
         text=True,
     )
 
-    value = result.stdout.strip()
-
     try:
-        duration = float(value)
+        duration = float(result.stdout.strip())
     except ValueError:
         duration = 1.0
 
@@ -72,11 +66,6 @@ def get_duration(audio_file):
 
 
 def create_music(out_dir, duration):
-    """
-    Generate simple copyright-safe background music.
-    This is generated locally by FFmpeg.
-    """
-
     music_file = Path(out_dir) / "background_music.wav"
 
     command = [
@@ -86,9 +75,8 @@ def create_music(out_dir, duration):
         "lavfi",
         "-i",
         (
-            "sine="
-            "frequency=110:"
-            "sample_rate=44100:"
+            f"sine=frequency=110:"
+            f"sample_rate=44100:"
             f"duration={duration}"
         ),
         "-filter:a",
@@ -100,18 +88,13 @@ def create_music(out_dir, duration):
 
     run_command(
         command,
-        "Generate copyright-safe background music",
+        "Generate background music",
     )
 
     return music_file
 
 
 def remove_emoji(text):
-    """
-    Remove emoji/symbol characters that may become tofu boxes
-    in FFmpeg drawtext on Ubuntu.
-    """
-
     if not text:
         return ""
 
@@ -129,22 +112,10 @@ def remove_emoji(text):
 
 
 def remove_source_text(script, content):
-    """
-    The AI script sometimes repeats the original English news
-    title/source topic.
-
-    Removing that repeated English source line from the visual
-    caption allows the Bengali/Hindi font to render cleanly.
-
-    IMPORTANT:
-    This does NOT change the original script used by Edge-TTS.
-    It only changes the on-screen caption file.
-    """
-
     if not script:
         return ""
 
-    cleaned = script
+    cleaned = str(script)
 
     candidates = [
         content.get("title", ""),
@@ -152,29 +123,26 @@ def remove_source_text(script, content):
     ]
 
     for item in candidates:
+        if item is None:
+            continue
+
+        item = str(item).strip()
+
         if item:
             cleaned = cleaned.replace(item, "")
 
     cleaned = remove_emoji(cleaned)
 
-    # Remove excessive blank lines.
     cleaned = re.sub(
         r"\n[ \t]*\n[ \t]*\n+",
         "\n\n",
         cleaned,
     )
 
-    cleaned = cleaned.strip()
-
-    return cleaned
+    return cleaned.strip()
 
 
-def wrap_text(text, width):
-    """
-    Simple wrapping for title so long titles do not run outside
-    the 1080x1920 frame.
-    """
-
+def wrap_text(text, width=34):
     if not text:
         return ""
 
@@ -219,65 +187,58 @@ def contains_devanagari(text):
     )
 
 
-def get_script_font(language):
-    if language == "bn":
-        return (
-            "/usr/share/fonts/truetype/noto/"
-            "NotoSansBengali-Regular.ttf"
-        )
+def get_bengali_font():
+    return (
+        "/usr/share/fonts/truetype/noto/"
+        "NotoSansBengali-Regular.ttf"
+    )
 
-    if language == "hi":
-        return (
-            "/usr/share/fonts/truetype/noto/"
-            "NotoSansDevanagari-Regular.ttf"
-        )
 
+def get_devanagari_font():
+    return (
+        "/usr/share/fonts/truetype/noto/"
+        "NotoSansDevanagari-Regular.ttf"
+    )
+
+
+def get_normal_font():
     return (
         "/usr/share/fonts/truetype/noto/"
         "NotoSans-Regular.ttf"
     )
+
+
+def get_script_font(language):
+    if language == "bn":
+        return get_bengali_font()
+
+    if language == "hi":
+        return get_devanagari_font()
+
+    return get_normal_font()
 
 
 def get_title_font(title, language):
-    """
-    Titles in the current project are mostly English source titles.
-    Use the normal Noto Sans font for Latin text so English letters
-    do not become square boxes.
-
-    If a future title is actually Bengali/Hindi, use its language
-    font.
-    """
+    title = title or ""
 
     if contains_bengali(title):
-        return (
-            "/usr/share/fonts/truetype/noto/"
-            "NotoSansBengali-Regular.ttf"
-        )
+        return get_bengali_font()
 
     if contains_devanagari(title):
-        return (
-            "/usr/share/fonts/truetype/noto/"
-            "NotoSansDevanagari-Regular.ttf"
-        )
+        return get_devanagari_font()
 
-    return (
-        "/usr/share/fonts/truetype/noto/"
-        "NotoSans-Regular.ttf"
-    )
+    return get_normal_font()
 
 
 def create_video(content, out_dir):
     if not shutil.which("ffmpeg"):
-        raise RuntimeError(
-            "FFmpeg is not installed."
-        )
+        raise RuntimeError("FFmpeg is not installed.")
 
     if not shutil.which("ffprobe"):
-        raise RuntimeError(
-            "FFprobe is not installed."
-        )
+        raise RuntimeError("FFprobe is not installed.")
 
     out_dir = Path(out_dir)
+
     out_dir.mkdir(
         parents=True,
         exist_ok=True,
@@ -292,9 +253,9 @@ def create_video(content, out_dir):
         "bn",
     )
 
-    # -------------------------------------------------
-    # 1. Generate Edge-TTS voice
-    # -------------------------------------------------
+    # ------------------------------------------------
+    # 1. VOICE
+    # ------------------------------------------------
 
     print("\n[1/5] Generating voice...")
 
@@ -303,9 +264,10 @@ def create_video(content, out_dir):
         out_dir,
     )
 
-    print(
-        f"Voice created: {voice_file}"
-    )
+    if not voice_file.exists():
+        raise RuntimeError(
+            "Voice file was not created."
+        )
 
     duration = get_duration(
         voice_file
@@ -315,9 +277,9 @@ def create_video(content, out_dir):
         f"Voice duration: {duration:.2f} seconds"
     )
 
-    # -------------------------------------------------
-    # 2. Generate background music
-    # -------------------------------------------------
+    # ------------------------------------------------
+    # 2. MUSIC
+    # ------------------------------------------------
 
     print("\n[2/5] Generating background music...")
 
@@ -326,15 +288,16 @@ def create_video(content, out_dir):
         duration,
     )
 
-    print(
-        f"Music created: {music_file}"
-    )
+    if not music_file.exists():
+        raise RuntimeError(
+            "Background music was not created."
+        )
 
-    # -------------------------------------------------
-    # 3. Prepare text files
-    # -------------------------------------------------
+    # ------------------------------------------------
+    # 3. TEXT FILES
+    # ------------------------------------------------
 
-    print("\n[3/5] Preparing Unicode text files...")
+    print("\n[3/5] Preparing text files...")
 
     original_title = str(
         content.get(
@@ -350,31 +313,33 @@ def create_video(content, out_dir):
         )
     )
 
+    # Clean title for visual display.
     title_text = remove_emoji(
         original_title
     )
 
-    # Keep title inside screen.
     title_text = wrap_text(
         title_text,
         34,
     )
 
-    # For captions, remove the repeated English source
-    # title/topic and keep the actual Bengali/Hindi text.
+    # Clean visual script.
+    #
+    # IMPORTANT:
+    # This does NOT modify the original script
+    # used for voice generation.
     script_text = remove_source_text(
         original_script,
         content,
     )
 
-    # Fallback if the cleaning removed too much.
     if not script_text:
         script_text = remove_emoji(
             original_script
         )
 
-    # Limit visual caption size.
-    script_text = script_text[:900]
+    # Prevent extremely large caption box.
+    script_text = script_text[:1000]
 
     title_file = (
         out_dir / "title.txt"
@@ -395,16 +360,18 @@ def create_video(content, out_dir):
     )
 
     print(
-        f"Title file: {title_file}"
+        "Title file:",
+        title_file,
     )
 
     print(
-        f"Script file: {script_file}"
+        "Script file:",
+        script_file,
     )
 
-    # -------------------------------------------------
-    # 4. Select fonts
-    # -------------------------------------------------
+    # ------------------------------------------------
+    # 4. FONTS
+    # ------------------------------------------------
 
     title_font = get_title_font(
         title_text,
@@ -415,37 +382,49 @@ def create_video(content, out_dir):
         language,
     )
 
+    normal_font = get_normal_font()
+
     print(
-        f"Language: {language}"
+        "Language:",
+        language,
     )
 
     print(
-        f"Title font: {title_font}"
+        "Title font:",
+        title_font,
     )
 
     print(
-        f"Script font: {script_font}"
+        "Script font:",
+        script_font,
     )
 
-    if not Path(title_font).exists():
-        raise RuntimeError(
-            f"Title font not found: {title_font}"
-        )
+    for font in [
+        title_font,
+        script_font,
+        normal_font,
+    ]:
+        if not Path(font).exists():
+            raise RuntimeError(
+                f"Font not found: {font}"
+            )
 
-    if not Path(script_font).exists():
-        raise RuntimeError(
-            f"Script font not found: {script_font}"
-        )
-
-    # -------------------------------------------------
-    # 5. Build animated FFmpeg video
-    # -------------------------------------------------
+    # ------------------------------------------------
+    # 5. VIDEO
+    # ------------------------------------------------
 
     print("\n[4/5] Rendering animated video...")
 
     output_file = (
         out_dir / "video.mp4"
     )
+
+    # IMPORTANT:
+    # Every FFmpeg filter is separated by COMMA (,)
+    # and not colon (:).
+    #
+    # This fixes the exact error shown in your
+    # GitHub Actions screenshot.
 
     video_filter = (
         "[0:v]"
@@ -477,7 +456,7 @@ def create_video(content, out_dir):
         "color=white@0.10:"
         "t=fill,"
 
-        # Title
+        # TITLE
         "drawtext="
         f"fontfile={title_font}:"
         f"textfile={title_file}:"
@@ -488,9 +467,9 @@ def create_video(content, out_dir):
         "y=190:"
         "box=1:"
         "boxcolor=black@0.50:"
-        "boxborderw=30:"
+        "boxborderw=30,"
 
-        # Main Bengali/Hindi caption
+        # MAIN SCRIPT
         "drawtext="
         f"fontfile={script_font}:"
         f"textfile={script_file}:"
@@ -501,7 +480,7 @@ def create_video(content, out_dir):
         "y=(h-text_h)/2:"
         "box=1:"
         "boxcolor=black@0.55:"
-        "boxborderw=38:"
+        "boxborderw=38,"
 
         # Bottom separator
         "drawbox="
@@ -512,28 +491,28 @@ def create_video(content, out_dir):
         "color=white@0.65:"
         "t=fill,"
 
-        # Footer
+        # FOOTER
         "drawtext="
-        "fontfile=/usr/share/fonts/truetype/noto/"
-        "NotoSans-Regular.ttf:"
+        f"fontfile={normal_font}:"
         "text='AI Viral Content':"
         "fontcolor=white@0.85:"
         "fontsize=34:"
         "x=(w-text_w)/2:"
         "y=h-120"
+
         "[v];"
 
-        # Voice
+        # VOICE
         "[1:a]"
         "volume=1.0"
         "[voice];"
 
-        # Music
+        # MUSIC
         "[2:a]"
         "volume=0.10"
         "[music];"
 
-        # Mix voice + music
+        # VOICE + MUSIC
         "[voice][music]"
         "amix="
         "inputs=2:"
@@ -546,6 +525,7 @@ def create_video(content, out_dir):
         "ffmpeg",
         "-y",
 
+        # 1080x1920 vertical background
         "-f",
         "lavfi",
         "-i",
@@ -555,24 +535,31 @@ def create_video(content, out_dir):
             f"r={FPS}"
         ),
 
+        # Voice
         "-i",
         str(voice_file),
 
+        # Music
         "-i",
         str(music_file),
 
+        # Video + audio filters
         "-filter_complex",
         video_filter,
 
+        # Output video
         "-map",
         "[v]",
 
+        # Output audio
         "-map",
         "[a]",
 
+        # Match voice duration
         "-t",
         str(duration),
 
+        # Video encoding
         "-c:v",
         "libx264",
 
@@ -585,6 +572,7 @@ def create_video(content, out_dir):
         "-pix_fmt",
         "yuv420p",
 
+        # Audio encoding
         "-c:a",
         "aac",
 
@@ -601,9 +589,9 @@ def create_video(content, out_dir):
         "Render final 1080x1920 video",
     )
 
-    # -------------------------------------------------
-    # Verify final video
-    # -------------------------------------------------
+    # ------------------------------------------------
+    # VERIFY
+    # ------------------------------------------------
 
     print("\n[5/5] Verifying final video...")
 
@@ -638,8 +626,18 @@ def create_video(content, out_dir):
             "Final video is NOT 1080x1920."
         )
 
+    if not output_file.exists():
+        raise RuntimeError(
+            "Final video file was not created."
+        )
+
+    print("\n" + "=" * 70)
+    print("SUCCESS")
+    print("=" * 70)
+
     print(
-        f"\nSUCCESS: {output_file}"
+        "Video:",
+        output_file,
     )
 
     return output_file
