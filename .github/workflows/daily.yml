@@ -38,12 +38,17 @@ jobs:
         run: |
           python app/main.py
 
+      - name: Check Funny Boy cartoon system
+        run: |
+          python app/cartoon_video_generator.py
+
       - name: Upload generated content
         uses: actions/upload-artifact@v4
         with:
           name: generated-content
           path: data/generated/
-          retention-days: 7     
+          retention-days: 7
+
       - name: Upload ONE video to YouTube
         env:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
