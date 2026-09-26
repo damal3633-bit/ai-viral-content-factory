@@ -1,0 +1,52 @@
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+from trend_finder import get_trends
+from ai_writer import make_content
+from video_generator import create_video
+
+ROOT = Path(__file__).resolve().parent.parent
+OUT = ROOT / "data" / "generated"
+OUT.mkdir(parents=True, exist_ok=True)
+
+
+def main():
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    trends = get_trends(limit=5)
+
+    results = []
+
+    for trend in trends:
+        for language in ("bn", "hi"):
+            content = make_content(trend, language)
+
+            job_dir = OUT / f"{run_id}_{language}_{len(results)+1}"
+            job_dir.mkdir(parents=True, exist_ok=True)
+
+            (job_dir / "content.json").write_text(
+                json.dumps(content, ensure_ascii=False, indent=2),
+                encoding="utf-8"
+            )
+
+            video = create_video(content, job_dir)
+
+            results.append({
+                "language": language,
+                "trend": trend["title"],
+                "video": str(video.relative_to(ROOT)),
+                "title": content["title"]
+            })
+
+    summary = OUT / f"{run_id}_summary.json"
+
+    summary.write_text(
+        json.dumps(results, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
+
+    print(json.dumps(results, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()
