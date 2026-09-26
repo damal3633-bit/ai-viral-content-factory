@@ -10,24 +10,15 @@ HEIGHT = 1920
 FPS = 30
 
 
-def escape_text(text):
-    return (
-        str(text)
-        .replace("\\", "\\\\")
-        .replace("'", "\\'")
-        .replace(":", "\\:")
-        .replace(",", "\\,")
-        .replace("%", "\\%")
-        .replace("\n", " ")
-    )
-
-
 def get_duration(audio_file):
     command = [
         "ffprobe",
-        "-v", "error",
-        "-show_entries", "format=duration",
-        "-of", "default=noprint_wrappers=1:nokey=1",
+        "-v",
+        "error",
+        "-show_entries",
+        "format=duration",
+        "-of",
+        "default=noprint_wrappers=1:nokey=1",
         str(audio_file),
     ]
 
@@ -48,13 +39,10 @@ def create_music(out_dir, duration):
     command = [
         "ffmpeg",
         "-y",
-        "-f", "lavfi",
+        "-f",
+        "lavfi",
         "-i",
-        (
-            "sine=frequency=110:"
-            f"sample_rate=44100:"
-            f"duration={duration}"
-        ),
+        f"sine=frequency=110:sample_rate=44100:duration={duration}",
         "-filter:a",
         "volume=0.035",
         "-c:a",
@@ -84,14 +72,20 @@ def create_video(content, out_dir):
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # -------------------------
-    # Voice
+    # Generate voice
     # -------------------------
 
-    voice_file = create_voice(content, out_dir)
-    duration = get_duration(voice_file)
+    voice_file = create_voice(
+        content,
+        out_dir
+    )
+
+    duration = get_duration(
+        voice_file
+    )
 
     # -------------------------
-    # Background music
+    # Generate background music
     # -------------------------
 
     music_file = create_music(
@@ -99,55 +93,72 @@ def create_video(content, out_dir):
         duration
     )
 
+    # -------------------------
+    # Save text into files
+    # This avoids FFmpeg escaping problems
+    # with Bengali/Hindi/quotes/commas.
+    # -------------------------
+
+    title_file = out_dir / "title.txt"
+    script_file = out_dir / "script.txt"
+
+    title_file.write_text(
+        content["title"][:100],
+        encoding="utf-8"
+    )
+
+    script_file.write_text(
+        content["script"][:500],
+        encoding="utf-8"
+    )
+
     output_file = out_dir / "video.mp4"
 
-    title = escape_text(
-        content["title"][:85]
-    )
-
-    script = escape_text(
-        content["script"][:260]
-    )
-
     # -------------------------
-    # Animated background
+    # Font
     # -------------------------
 
-    background = (
-        "color=c=0x08111f:"
-        f"s={WIDTH}x{HEIGHT}:"
-        f"r={FPS}"
+    language = content.get(
+        "language",
+        "bn"
     )
 
-    # Moving light effect
-    moving_light = (
+    if language == "bn":
+        font_file = (
+            "/usr/share/fonts/truetype/noto/"
+            "NotoSansBengali-Regular.ttf"
+        )
+    else:
+        font_file = (
+            "/usr/share/fonts/truetype/noto/"
+            "NotoSansDevanagari-Regular.ttf"
+        )
+
+    # -------------------------
+    # Video filters
+    # -------------------------
+
+    video_filter = (
+        "[0:v]"
         "drawbox="
-        "x='120+180*sin(t*0.8)':"
-        "y='180+250*cos(t*0.6)':"
+        "x=120+180*sin(t*0.8):"
+        "y=180+250*cos(t*0.6):"
         "w=520:"
         "h=520:"
         "color=0x2563eb@0.16:"
-        "t=fill"
-    )
-
-    moving_light_2 = (
+        "t=fill,"
+        
         "drawbox="
-        "x='500+200*cos(t*0.7)':"
-        "y='1000+250*sin(t*0.5)':"
+        "x=500+200*cos(t*0.7):"
+        "y=1000+250*sin(t*0.5):"
         "w=600:"
         "h=600:"
         "color=0x7c3aed@0.13:"
-        "t=fill"
-    )
+        "t=fill,"
 
-    # -------------------------
-    # Title
-    # -------------------------
-
-    title_layer = (
         "drawtext="
-        "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:"
-        f"text='{title}':"
+        f"fontfile={font_file}:"
+        f"textfile={title_file}:"
         "fontcolor=white:"
         "fontsize=62:"
         "line_spacing=12:"
@@ -155,17 +166,11 @@ def create_video(content, out_dir):
         "y=230:"
         "box=1:"
         "boxcolor=black@0.45:"
-        "boxborderw=32"
-    )
+        "boxborderw=32,"
 
-    # -------------------------
-    # Captions
-    # -------------------------
-
-    caption_layer = (
         "drawtext="
-        "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:"
-        f"text='{script}':"
+        f"fontfile={font_file}:"
+        f"textfile={script_file}:"
         "fontcolor=white:"
         "fontsize=48:"
         "line_spacing=20:"
@@ -173,98 +178,100 @@ def create_video(content, out_dir):
         "y=(h-text_h)/2:"
         "box=1:"
         "boxcolor=black@0.52:"
-        "boxborderw=38"
-    )
+        "boxborderw=38,"
 
-    # -------------------------
-    # Caption indicator
-    # -------------------------
-
-    caption_bar = (
         "drawbox="
         "x=70:"
         "y=h-330:"
         "w=940:"
         "h=8:"
         "color=white@0.65:"
-        "t=fill"
-    )
+        "t=fill,"
 
-    # -------------------------
-    # Branding
-    # -------------------------
-
-    branding = (
         "drawtext="
-        "fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf:"
+        f"fontfile={font_file}:"
         "text='AI Viral Content':"
         "fontcolor=white@0.8:"
         "fontsize=34:"
         "x=(w-text_w)/2:"
         "y=h-120"
+        "[v];"
+
+        "[1:a]"
+        "volume=1.0"
+        "[voice];"
+
+        "[2:a]"
+        "volume=0.10"
+        "[music];"
+
+        "[voice][music]"
+        "amix="
+        "inputs=2:"
+        "duration=first:"
+        "dropout_transition=2"
+        "[a]"
     )
 
-    video_filter = ",".join([
-        moving_light,
-        moving_light_2,
-        title_layer,
-        caption_layer,
-        caption_bar,
-        branding,
-    ])
-
     # -------------------------
-    # Mix voice + music
+    # FFmpeg
     # -------------------------
 
     command = [
         "ffmpeg",
         "-y",
 
-        "-f", "lavfi",
-        "-i", background,
+        "-f",
+        "lavfi",
 
-        "-i", str(voice_file),
+        "-i",
+        f"color=c=0x08111f:s={WIDTH}x{HEIGHT}:r={FPS}",
 
-        "-i", str(music_file),
+        "-i",
+        str(voice_file),
 
-        "-vf", video_filter,
+        "-i",
+        str(music_file),
 
         "-filter_complex",
-        (
-            "[1:a]volume=1.0[voice];"
-            "[2:a]volume=0.10[music];"
-            "[voice][music]"
-            "amix=inputs=2:"
-            "duration=first:"
-            "dropout_transition=2"
-            "[audio]"
-        ),
+        video_filter,
 
-        "-map", "0:v:0",
-        "-map", "[audio]",
+        "-map",
+        "[v]",
 
-        "-t", str(duration),
+        "-map",
+        "[a]",
 
-        "-c:v", "libx264",
-        "-preset", "veryfast",
-        "-crf", "24",
+        "-t",
+        str(duration),
 
-        "-pix_fmt", "yuv420p",
+        "-c:v",
+        "libx264",
 
-        "-c:a", "aac",
-        "-b:a", "128k",
+        "-preset",
+        "veryfast",
+
+        "-crf",
+        "24",
+
+        "-pix_fmt",
+        "yuv420p",
+
+        "-c:a",
+        "aac",
+
+        "-b:a",
+        "128k",
 
         "-shortest",
 
         str(output_file),
     ]
 
+    # Don't hide FFmpeg error anymore.
     subprocess.run(
         command,
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        check=True
     )
 
     return output_file
